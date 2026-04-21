@@ -22,7 +22,7 @@
   .fg { display: flex; flex-direction: column; gap: 6px; }
   .fg.full { grid-column: 1 / -1; }
   label { font-size: 11px; color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
-  input[type=text], input[type=password], input[type=number], select, textarea {
+  input[type=text], input[type=password], select, textarea {
     background: #1a1a1a; border: 1px solid #2e2e2e; border-radius: 8px;
     color: #f0f0f0; font-family: inherit; font-size: 14px; padding: 9px 12px; width: 100%;
     transition: border-color 0.15s; -webkit-appearance: none;
@@ -38,9 +38,9 @@
   .btn-sm { font-size: 13px; padding: 7px 14px; }
   .btn-danger { background: transparent; border: 1px solid #2e2e2e; color: #888; font-size: 12px; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-family: inherit; }
   .btn-edit { background: transparent; border: 1px solid #2a4a7a; color: #70a0e0; font-size: 12px; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-family: inherit; }
-  .btn-wishlist { background: transparent; border: 1px solid #6a3a7a; color: #c070e0; font-size: 12px; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-family: inherit; }
   .btn-export { background: transparent; border: 1px solid #3a3a3a; color: #f0f0f0; font-size: 13px; padding: 7px 16px; border-radius: 8px; cursor: pointer; font-family: inherit; }
   .btn-export.copied { border-color: #27ae60; color: #2ecc71; }
+  .move-btn { background: transparent; border: 1px solid #27ae60; color: #2ecc71; font-size: 12px; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-family: inherit; }
   .status { font-size: 13px; color: #888; min-height: 20px; margin-top: 8px; }
   .empty { text-align: center; padding: 3rem 1rem; color: #555; font-size: 14px; }
   .card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 12px; padding: 1rem; margin-bottom: 10px; }
@@ -59,8 +59,6 @@
   .badge-boxset { background: #0d2a3a; color: #4db5d5; }
   .badge-deluxe { background: #3a2a0d; color: #d5c04d; }
   .badge-wishlist { background: #3a2a4a; color: #c070e0; }
-  .badge-read { background: #0d3a1a; color: #4dbb6a; }
-  .badge-unread { background: #2a2a2a; color: #888; }
   .card-notes { font-size: 13px; color: #aaa; margin-top: 8px; line-height: 1.5; }
   .card-date { font-size: 11px; color: #555; margin-top: 6px; }
   .card-actions { display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
@@ -83,7 +81,7 @@
   .format-row-label { color: #aaa; }
   .format-row-count { color: #f0f0f0; font-weight: 500; }
   .format-bar { height: 4px; background: #2a2a2a; border-radius: 2px; margin-top: 2px; }
-  .format-bar-fill { height: 4px; background: #555; border-radius: 2px; transition: width 0.3s; }
+  .format-bar-fill { height: 4px; background: #555; border-radius: 2px; }
   .edit-form { margin-top: 12px; padding-top: 12px; border-top: 1px solid #2a2a2a; display: flex; flex-direction: column; gap: 10px; }
   .edit-form .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .confirm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 200; padding: 1rem; }
@@ -107,7 +105,6 @@
   .sync-dot.ok { background: #2ecc71; }
   .sync-dot.error { background: #e74c3c; }
   .export-note { font-size: 12px; color: #555; margin-top: 6px; min-height: 16px; }
-  .move-btn { background: transparent; border: 1px solid #27ae60; color: #2ecc71; font-size: 12px; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-family: inherit; }
 </style>
 </head>
 <body>
@@ -154,7 +151,7 @@
     <div class="form-grid">
       <div class="fg full"><label>Title</label><input type="text" id="f-title" placeholder="e.g. Absolute Batman Vol 1" /></div>
       <div class="fg full"><label>Series / Publisher</label><input type="text" id="f-series" placeholder="e.g. Batman, DC Comics" /></div>
-      <div class="fg"><label>Format</label>
+      <div class="fg full"><label>Format</label>
         <select id="f-format">
           <option value="trade">Trade Paperback</option>
           <option value="hardcover">Hardcover</option>
@@ -163,13 +160,6 @@
           <option value="ohc">OHC</option>
           <option value="boxset">Box Set</option>
           <option value="deluxe">Deluxe Edition</option>
-        </select>
-      </div>
-      <div class="fg"><label>Read status</label>
-        <select id="f-read">
-          <option value="unread">Unread</option>
-          <option value="read">Read</option>
-          <option value="reading">Currently reading</option>
         </select>
       </div>
       <div class="fg full"><label>Notes</label><textarea id="f-notes" placeholder="Any notes about this edition..."></textarea></div>
@@ -201,14 +191,6 @@
       <button class="btn-export" id="export-btn" onclick="exportCollection()">Export</button>
     </div>
     <div id="export-msg" class="export-note"></div>
-    <div id="read-filter-row" style="margin-bottom:1rem;">
-      <div class="filter-row">
-        <button class="filter-btn active" onclick="setReadFilter('all',event)">All</button>
-        <button class="filter-btn" onclick="setReadFilter('unread',event)">Unread</button>
-        <button class="filter-btn" onclick="setReadFilter('reading',event)">Reading</button>
-        <button class="filter-btn" onclick="setReadFilter('read',event)">Read</button>
-      </div>
-    </div>
     <div id="collection-list"></div>
   </div>
 
@@ -232,17 +214,14 @@ const SUPABASE_URL = 'https://phrmkxxcfdesollankvh.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBocm1reHhjZmRlc29sbGFua3ZoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3MzEwNDEsImV4cCI6MjA5MjMwNzA0MX0.V5631_Ex9Ds6OQNSKlmR8BqfdYM_KG8RVFI2WULrFf0';
 const API = `${SUPABASE_URL}/rest/v1/comic_collection`;
 const HEADERS = { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` };
-
 const FL = { trade:'Trade Paperback', hardcover:'Hardcover', omnibus:'Omnibus', absolute:'Absolute', ohc:'OHC', boxset:'Box Set', deluxe:'Deluxe Edition' };
 const FC = { trade:'badge-trade', hardcover:'badge-hardcover', omnibus:'badge-omnibus', absolute:'badge-absolute', ohc:'badge-ohc', boxset:'badge-boxset', deluxe:'badge-deluxe' };
-const RL = { read:'Read', unread:'Unread', reading:'Reading' };
 
 let collection = [], wishlist = [];
-let colFilter = 'all', readFilter = 'all';
-let confirmCallback = null, editRatings = {};
+let colFilter = 'all';
+let confirmCallback = null;
 let collapsedSeries = new Set();
 
-// ── Supabase ──────────────────────────────────────────────────────
 function setSyncDot(s) { const d=document.getElementById('sync-dot'); d.className='sync-dot'+(s?' '+s:''); }
 
 async function dbGet(type) {
@@ -270,12 +249,8 @@ async function loadAll() {
   renderAll();
 }
 
-async function save(type) {
-  const map = { collection, wishlist };
-  await dbSet(type, map[type]);
-}
+async function save(type) { const map={collection,wishlist}; await dbSet(type,map[type]); }
 
-// ── Confirm ───────────────────────────────────────────────────────
 function showConfirm(title,msg,okLabel,cb) {
   document.getElementById('confirm-title').textContent=title;
   document.getElementById('confirm-msg').textContent=msg;
@@ -286,7 +261,6 @@ function showConfirm(title,msg,okLabel,cb) {
 function closeConfirm() { document.getElementById('confirm-overlay').style.display='none'; confirmCallback=null; }
 document.getElementById('confirm-ok-btn').onclick=()=>{ if(confirmCallback)confirmCallback(); closeConfirm(); };
 
-// ── Helpers ───────────────────────────────────────────────────────
 function renderAll() { renderCollection(); renderWishlist(); renderStats(); updateCounts(); }
 function updateCounts() {
   document.getElementById('col-count').textContent=collection.length;
@@ -306,14 +280,12 @@ function toggleSeries(name) {
 function clearSearch() { document.getElementById('search-input').value=''; renderCollection(); }
 function clearWishSearch() { document.getElementById('wish-search').value=''; renderWishlist(); }
 
-// ── Add ───────────────────────────────────────────────────────────
 function getFormData() {
   return {
     id: Date.now(),
     title: document.getElementById('f-title').value.trim(),
     series: document.getElementById('f-series').value.trim(),
     format: document.getElementById('f-format').value,
-    read: document.getElementById('f-read').value,
     notes: document.getElementById('f-notes').value.trim(),
     addedDate: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
   };
@@ -321,7 +293,6 @@ function getFormData() {
 function clearForm() {
   ['f-title','f-series','f-notes'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('f-format').value='trade';
-  document.getElementById('f-read').value='unread';
   document.getElementById('add-msg').textContent='';
 }
 function addItem() {
@@ -341,7 +312,6 @@ function addToWishlist() {
   setTimeout(()=>document.getElementById('add-msg').textContent='',2500);
 }
 
-// ── Edit ──────────────────────────────────────────────────────────
 function toggleEdit(id, isWishlist=false) {
   const list=isWishlist?wishlist:collection;
   const item=list.find(e=>e.id===id); if(!item)return;
@@ -352,14 +322,9 @@ function toggleEdit(id, isWishlist=false) {
   form.innerHTML=`<div class="form-grid">
     <div class="fg full"><label>Title</label><input type="text" id="et-${id}" value="${item.title.replace(/"/g,'&quot;')}" /></div>
     <div class="fg full"><label>Series / Publisher</label><input type="text" id="es-${id}" value="${(item.series||'').replace(/"/g,'&quot;')}" /></div>
-    <div class="fg"><label>Format</label><select id="ef-${id}">
+    <div class="fg full"><label>Format</label><select id="ef-${id}">
       ${Object.entries(FL).map(([v,l])=>`<option value="${v}" ${item.format===v?'selected':''}>${l}</option>`).join('')}
     </select></div>
-    ${!isWishlist?`<div class="fg"><label>Read status</label><select id="er-${id}">
-      <option value="unread" ${item.read==='unread'?'selected':''}>Unread</option>
-      <option value="read" ${item.read==='read'?'selected':''}>Read</option>
-      <option value="reading" ${item.read==='reading'?'selected':''}>Currently reading</option>
-    </select></div>`:''}
     <div class="fg full"><label>Notes</label><textarea id="en-${id}">${item.notes||''}</textarea></div>
   </div>
   <div style="display:flex;gap:8px;margin-top:4px;">
@@ -368,34 +333,26 @@ function toggleEdit(id, isWishlist=false) {
   </div>`;
   card.appendChild(form);
 }
-function saveEdit(id,isWishlist=false) {
+function saveEdit(id, isWishlist=false) {
   const list=isWishlist?wishlist:collection;
   const item=list.find(e=>e.id===id); if(!item)return;
   item.title=document.getElementById('et-'+id).value.trim()||item.title;
   item.series=document.getElementById('es-'+id).value.trim();
   item.format=document.getElementById('ef-'+id).value;
-  if(!isWishlist)item.read=document.getElementById('er-'+id).value;
   item.notes=document.getElementById('en-'+id).value.trim();
   save(isWishlist?'wishlist':'collection');
   if(isWishlist)renderWishlist(); else renderCollection();
 }
 
-// ── Collection actions ────────────────────────────────────────────
 function deleteItem(id) {
   const item=collection.find(e=>e.id===id); if(!item)return;
   showConfirm('Remove from collection?',`"${item.title}" will be permanently removed.`,'Remove',()=>{
     collection=collection.filter(e=>e.id!==id); save('collection'); updateCounts(); renderCollection();
   });
 }
-function toggleRead(id) {
-  const item=collection.find(e=>e.id===id); if(!item)return;
-  const cycle={unread:'reading',reading:'read',read:'unread'};
-  item.read=cycle[item.read]||'unread';
-  save('collection'); renderCollection();
-}
 function moveToCollection(id) {
   const item=wishlist.find(w=>w.id===id); if(!item)return;
-  collection.unshift({...item,read:'unread',addedDate:new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})});
+  collection.unshift({...item,addedDate:new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})});
   wishlist=wishlist.filter(w=>w.id!==id);
   Promise.all([save('collection'),save('wishlist')]); updateCounts(); renderCollection(); renderWishlist(); renderStats();
 }
@@ -406,31 +363,20 @@ function deleteWishItem(id) {
   });
 }
 
-// ── Filters ───────────────────────────────────────────────────────
 function setColFilter(f,e) {
   colFilter=f;
   document.querySelectorAll('#col-filters .filter-btn').forEach(b=>b.classList.remove('active'));
   if(e&&e.target)e.target.classList.add('active');
   renderCollection();
 }
-function setReadFilter(f,e) {
-  readFilter=f;
-  document.querySelectorAll('#read-filter-row .filter-btn').forEach(b=>b.classList.remove('active'));
-  if(e&&e.target)e.target.classList.add('active');
-  renderCollection();
-}
 
-// ── Render ────────────────────────────────────────────────────────
 function renderCollection() {
   const list=document.getElementById('collection-list');
   const q=(document.getElementById('search-input').value||'').toLowerCase();
   let filtered=collection;
   if(colFilter!=='all')filtered=filtered.filter(e=>e.format===colFilter);
-  if(readFilter!=='all')filtered=filtered.filter(e=>e.read===readFilter);
   if(q)filtered=filtered.filter(e=>e.title.toLowerCase().includes(q)||(e.series||'').toLowerCase().includes(q)||(e.notes||'').toLowerCase().includes(q));
   if(!filtered.length){list.innerHTML='<div class="empty">No entries match.</div>';return;}
-
-  // Group by series
   const groups={},standalone=[];
   filtered.forEach(e=>{
     const s=e.series||getSeriesName(e.title);
@@ -438,7 +384,6 @@ function renderCollection() {
       if(!groups[s])groups[s]=[];groups[s].push(e);
     }else standalone.push(e);
   });
-
   let html='';
   Object.keys(groups).sort().forEach(name=>{
     const items=groups[name],collapsed=collapsedSeries.has(name);
@@ -454,8 +399,6 @@ function renderCollection() {
 }
 
 function collectionCardHTML(e) {
-  const readColor=e.read==='read'?'badge-read':e.read==='reading'?'badge-prog':'badge-unread';
-  const readLabel=e.read==='read'?'Read':e.read==='reading'?'Reading':'Unread';
   return `<div class="card" id="card-${e.id}">
     <div class="card-top">
       <div style="flex:1">
@@ -463,7 +406,6 @@ function collectionCardHTML(e) {
         ${e.series?`<div class="card-series">${e.series}</div>`:''}
         <div class="card-meta">
           <span class="badge ${FC[e.format]||'badge-trade'}">${FL[e.format]||e.format}</span>
-          <span class="badge ${readColor}" style="cursor:pointer" onclick="toggleRead(${e.id})" title="Click to cycle read status">${readLabel}</span>
         </div>
         ${e.notes?`<div class="card-notes">${e.notes}</div>`:''}
         <div class="card-date">Added ${e.addedDate}</div>
@@ -507,9 +449,6 @@ function renderWishlist() {
 function renderStats() {
   const el=document.getElementById('stats-content');
   const total=collection.length;
-  const read=collection.filter(e=>e.read==='read').length;
-  const unread=collection.filter(e=>e.read==='unread').length;
-  const reading=collection.filter(e=>e.read==='reading').length;
   const formats={};
   collection.forEach(e=>{formats[e.format]=(formats[e.format]||0)+1;});
   const maxCount=Math.max(...Object.values(formats),1);
@@ -523,9 +462,7 @@ function renderStats() {
   el.innerHTML=`
     <div class="stats-grid">
       <div class="stat-card"><div class="stat-label">Total owned</div><div class="stat-value">${total}</div><div class="stat-sub">${wishlist.length} on wishlist</div></div>
-      <div class="stat-card"><div class="stat-label">Read</div><div class="stat-value">${read}</div><div class="stat-sub">${total?Math.round(read/total*100):0}% of collection</div></div>
-      <div class="stat-card"><div class="stat-label">Unread</div><div class="stat-value">${unread}</div><div class="stat-sub">Waiting to be read</div></div>
-      <div class="stat-card"><div class="stat-label">Reading now</div><div class="stat-value">${reading}</div><div class="stat-sub">In progress</div></div>
+      <div class="stat-card"><div class="stat-label">On wishlist</div><div class="stat-value">${wishlist.length}</div><div class="stat-sub">Waiting to buy</div></div>
     </div>
     <div class="format-breakdown">
       <div class="stat-label" style="margin-bottom:10px;">By format</div>
@@ -536,7 +473,7 @@ function renderStats() {
 function exportCollection() {
   if(!collection.length){document.getElementById('export-msg').textContent='Nothing to export yet.';setTimeout(()=>document.getElementById('export-msg').textContent='',3000);return;}
   const lines=['COMIC COLLECTION EXPORT',`Exported: ${new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}`,`Total: ${collection.length}`,'',
-    ...collection.map(e=>[`${e.title}`,e.series?`Series: ${e.series}`:null,`Format: ${FL[e.format]||e.format}`,`Status: ${RL[e.read]||e.read}`,e.notes?`Notes: ${e.notes}`:null,`Added: ${e.addedDate}`,'---'].filter(Boolean).join('\n'))];
+    ...collection.map(e=>[`${e.title}`,e.series?`Series: ${e.series}`:null,`Format: ${FL[e.format]||e.format}`,e.notes?`Notes: ${e.notes}`:null,`Added: ${e.addedDate}`,'---'].filter(Boolean).join('\n'))];
   if(wishlist.length){lines.push('','WISHLIST','',
     ...wishlist.map(w=>[`${w.title}`,w.series?`Series: ${w.series}`:null,`Format: ${FL[w.format]||w.format}`,w.notes?`Notes: ${w.notes}`:null,'---'].filter(Boolean).join('\n')));}
   navigator.clipboard.writeText(lines.join('\n')).then(()=>{
