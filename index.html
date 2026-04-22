@@ -105,6 +105,13 @@
   .sync-dot.ok { background: #2ecc71; }
   .sync-dot.error { background: #e74c3c; }
   .export-note { font-size: 12px; color: #555; margin-top: 6px; min-height: 16px; }
+  .discover-output { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 12px; padding: 1rem; font-size: 14px; color: #f0f0f0; line-height: 1.7; min-height: 120px; }
+  .discover-output.placeholder { color: #555; font-style: italic; }
+  .discover-output p { margin-bottom: 0.75rem; }
+  .discover-output p:last-child { margin-bottom: 0; }
+  .discover-output strong { font-weight: 600; color: #f0f0f0; }
+  @keyframes dots { 0%,20%{content:'.'} 40%{content:'..'} 60%{content:'...'} 80%,100%{content:''} }
+  .loading::after { content: ''; animation: dots 1.2s steps(4,end) infinite; }
 </style>
 </head>
 <body>
@@ -144,6 +151,7 @@
     <button class="tab" onclick="switchTab('collection')">Collection <span class="count" id="col-count">0</span></button>
     <button class="tab" onclick="switchTab('wishlist')">Wishlist <span class="count" id="wish-count">0</span></button>
     <button class="tab" onclick="switchTab('stats')">Stats</button>
+    <button class="tab" onclick="switchTab('discover')">Discover ↗</button>
   </div>
 
   <!-- ADD -->
@@ -206,6 +214,19 @@
   <!-- STATS -->
   <div id="tab-stats" class="section">
     <div id="stats-content"></div>
+  </div>
+
+  <!-- DISCOVER -->
+  <div id="tab-discover" class="section">
+    <p style="font-size:14px;color:#888;margin-bottom:1.25rem;line-height:1.6;">Based on your collection and media log, I'll suggest runs and stories worth seeking out — things you don't already own.</p>
+    <div class="fg" style="margin-bottom:0.75rem;">
+      <label>Anything on your mind?</label>
+      <input type="text" id="discover-mood" placeholder="e.g. want something dark, looking for sci-fi, in the mood for classic Marvel..." />
+    </div>
+    <div class="actions" style="margin-top:0.75rem;margin-bottom:1rem;">
+      <button class="btn btn-primary" onclick="getDiscovery()">Find something ↗</button>
+    </div>
+    <div id="discover-output" class="discover-output placeholder">Your recommendations will appear here.</div>
   </div>
 </div>
 
@@ -483,8 +504,84 @@ function exportCollection() {
   }).catch(()=>{document.getElementById('export-msg').textContent='Could not access clipboard.';});
 }
 
+async function getDiscovery() {
+  const mood = document.getElementById('discover-mood').value.trim();
+  const out = document.getElementById('discover-output');
+  out.className = 'discover-output';
+  out.innerHTML = '<span class="loading">Thinking</span>';
+
+  // Build collection summary
+  const collectionSummary = collection.length
+    ? collection.map(e=>`- ${e.title}${e.series?' ('+e.series+')':''}`).join('\n')
+    : 'No entries yet.';
+
+  const wishlistSummary = wishlist.length
+    ? wishlist.map(w=>`- ${w.title}${w.series?' ('+w.series+')':''}`).join('\n')
+    : 'None.';
+
+  // Fetch media log entries from Supabase
+  let mediaLogSummary = '';
+  try {
+    const mlRes = await fetch(`${SUPABASE_URL}/rest/v1/media_log?type=eq.entries&select=*`, { headers: HEADERS });
+    if (mlRes.ok) {
+      const rows = await mlRes.json();
+      const mlEntries = rows.length ? rows[0].data : [];
+      if (mlEntries && mlEntries.length) {
+        const comicEntries = mlEntries.filter(e=>e.type==='comic');
+        const otherEntries = mlEntries.filter(e=>e.type!=='comic');
+        if (comicEntries.length) {
+          mediaLogSummary += '\nComics already read (from media log):\n' + comicEntries.map(e=>`- ${e.title} (${e.rating}/5 stars)${e.notes?'. Notes: '+e.notes:''}`).join('\n');
+        }
+        if (otherEntries.length) {
+          mediaLogSummary += '\n\nOther media consumed (for broader taste context):\n' + otherEntries.slice(0,20).map(e=>`- ${e.title} (${e.type}, ${e.rating}/5)${e.notes?'. Notes: '+e.notes:''}`).join('\n');
+        }
+      }
+    }
+  } catch(e) { console.log('Could not load media log', e); }
+
+  const prompt = `You are a comic book recommendation expert. Based on someone's collection and taste, recommend 3-5 runs or stories they should seek out next — things they don't already own.
+
+Their comic collection (owned):
+${collectionSummary}
+
+Their wishlist (already aware of these, don't repeat):
+${wishlistSummary}
+${mediaLogSummary}
+
+Their mood/request: ${mood || 'not specified'}
+
+Rules:
+- Recommend RUNS or STORIES, not specific editions (e.g. "Brubaker's Daredevil run" not "Daredevil Omnibus Vol 1")
+- Do NOT recommend anything already in their collection or wishlist
+- Focus on collected edition-friendly runs (things that have been well-collected)
+- Give 3-5 recommendations
+- For each: bold the title/run name, then 1-2 sentences on why it fits their taste
+- Be specific about what makes each recommendation relevant to what they already love
+- No bullet point symbols, use line breaks between recommendations`;
+
+  try {
+    const res = await fetch('/.netlify/functions/claude', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 1000, messages: [{ role: 'user', content: prompt }] })
+    });
+    const data = await res.json();
+    const text = data.content.map(i=>i.text||'').join('').trim();
+    out.className = 'discover-output';
+    // Render markdown
+    const esc = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    out.innerHTML = esc
+      .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g,'<em>$1</em>')
+      .split('\n\n').map(p=>p.trim()?`<p>${p.replace(/\n/g,'<br>')}</p>`:'').join('') || `<p>${esc}</p>`;
+  } catch(e) {
+    out.className = 'discover-output placeholder';
+    out.textContent = 'Something went wrong. Try again.';
+  }
+}
+
 function switchTab(name) {
-  const names=['add','collection','wishlist','stats'];
+  const names=['add','collection','wishlist','stats','discover'];
   document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',names[i]===name));
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
   document.getElementById('tab-'+name).classList.add('active');
