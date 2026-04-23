@@ -59,6 +59,9 @@
   .badge-boxset { background: #0d2a3a; color: #4db5d5; }
   .badge-deluxe { background: #3a2a0d; color: #d5c04d; }
   .badge-wishlist { background: #3a2a4a; color: #c070e0; }
+  .badge-single-want { background: #fef3c7; color: #92400e; }
+  .badge-single-owned { background: #d1fae5; color: #065f46; }
+  .card-single-owned { opacity: 0.65; }
   .card-notes { font-size: 13px; color: #aaa; margin-top: 8px; line-height: 1.5; }
   .card-date { font-size: 11px; color: #555; margin-top: 6px; }
   .card-actions { display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
@@ -151,6 +154,7 @@
     <button class="tab" onclick="switchTab('collection')">Collection <span class="count" id="col-count">0</span></button>
     <button class="tab" onclick="switchTab('wishlist')">Wishlist <span class="count" id="wish-count">0</span></button>
     <button class="tab" onclick="switchTab('stats')">Stats</button>
+    <button class="tab" onclick="switchTab('singles')">Singles <span class="count" id="singles-count">0</span></button>
     <button class="tab" onclick="switchTab('discover')">Discover ↗</button>
   </div>
 
@@ -216,6 +220,38 @@
     <div id="stats-content"></div>
   </div>
 
+  <!-- SINGLES -->
+  <div id="tab-singles" class="section">
+    <div class="singles-add-form" style="margin-bottom:1.25rem;">
+      <div class="form-grid">
+        <div class="fg full"><label>Title / Series</label><input type="text" id="si-title" placeholder="e.g. Amazing Spider-Man" /></div>
+        <div class="fg"><label>Issue #</label><input type="text" id="si-issue" placeholder="e.g. 252" style="max-width:120px;" /></div>
+        <div class="fg"><label>Status</label>
+          <select id="si-status">
+            <option value="want">Want to find</option>
+            <option value="owned">Owned</option>
+          </select>
+        </div>
+        <div class="fg full"><label>Notes (optional)</label><input type="text" id="si-notes" placeholder="e.g. first black costume, key issue" /></div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" onclick="addSingle()">Add issue</button>
+        <button class="btn btn-secondary" onclick="clearSingleForm()">Clear</button>
+      </div>
+      <div id="singles-msg" class="status"></div>
+    </div>
+    <div class="search-bar">
+      <input type="text" id="singles-search" placeholder="Search singles..." oninput="renderSingles()" />
+      <button class="search-clear" onclick="clearSinglesSearch()">✕</button>
+    </div>
+    <div class="filter-row" style="margin-bottom:1rem;">
+      <button class="filter-btn active" onclick="setSinglesFilter('all',event)">All</button>
+      <button class="filter-btn" onclick="setSinglesFilter('want',event)">Want to find</button>
+      <button class="filter-btn" onclick="setSinglesFilter('owned',event)">Owned</button>
+    </div>
+    <div id="singles-list"></div>
+  </div>
+
   <!-- DISCOVER -->
   <div id="tab-discover" class="section">
     <p style="font-size:14px;color:#888;margin-bottom:1.25rem;line-height:1.6;">Based on your collection and media log, I'll suggest runs and stories worth seeking out — things you don't already own.</p>
@@ -238,7 +274,7 @@ const HEADERS = { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'A
 const FL = { trade:'Trade Paperback', hardcover:'Hardcover', omnibus:'Omnibus', absolute:'Absolute', ohc:'OHC', boxset:'Box Set', deluxe:'Deluxe Edition' };
 const FC = { trade:'badge-trade', hardcover:'badge-hardcover', omnibus:'badge-omnibus', absolute:'badge-absolute', ohc:'badge-ohc', boxset:'badge-boxset', deluxe:'badge-deluxe' };
 
-let collection = [], wishlist = [];
+let collection = [], wishlist = [], singles = [];
 let colFilter = 'all';
 let confirmCallback = null;
 let collapsedSeries = new Set();
@@ -254,7 +290,7 @@ async function dbGet(type) {
 
 async function dbSet(type, data) {
   setSyncDot('syncing');
-  const id = type==='collection'?1:2;
+  const id = type==='collection'?1:type==='wishlist'?2:3;
   await fetch(`${API}?type=eq.${type}`, { method:'DELETE', headers: HEADERS });
   const res = await fetch(API, { method:'POST', headers:{...HEADERS,'Prefer':'return=minimal'}, body:JSON.stringify({id,type,data,updated_at:new Date().toISOString()}) });
   if (res.ok) { setSyncDot('ok'); setTimeout(()=>setSyncDot(''),2000); } else setSyncDot('error');
@@ -262,15 +298,15 @@ async function dbSet(type, data) {
 
 async function loadAll() {
   try {
-    const [c,w] = await Promise.all([dbGet('collection'),dbGet('wishlist')]);
-    collection=c||[]; wishlist=w||[];
+    const [c,w,s] = await Promise.all([dbGet('collection'),dbGet('wishlist'),dbGet('singles')]);
+    collection=c||[]; wishlist=w||[]; singles=s||[];
   } catch(err) { console.error('Load error',err); }
   document.getElementById('loading-screen').style.display='none';
   document.getElementById('main-app').style.display='block';
   renderAll();
 }
 
-async function save(type) { const map={collection,wishlist}; await dbSet(type,map[type]); }
+async function save(type) { const map={collection,wishlist,singles}; await dbSet(type,map[type]); }
 
 function showConfirm(title,msg,okLabel,cb) {
   document.getElementById('confirm-title').textContent=title;
@@ -282,10 +318,11 @@ function showConfirm(title,msg,okLabel,cb) {
 function closeConfirm() { document.getElementById('confirm-overlay').style.display='none'; confirmCallback=null; }
 document.getElementById('confirm-ok-btn').onclick=()=>{ if(confirmCallback)confirmCallback(); closeConfirm(); };
 
-function renderAll() { renderCollection(); renderWishlist(); renderStats(); updateCounts(); }
+function renderAll() { renderCollection(); renderWishlist(); renderSingles(); renderStats(); updateCounts(); }
 function updateCounts() {
   document.getElementById('col-count').textContent=collection.length;
   document.getElementById('wish-count').textContent=wishlist.length;
+  document.getElementById('singles-count').textContent=singles.length;
 }
 function getSeriesName(title) {
   const m=title.match(/^(.+?)\s+(?:vol\.?|volume|#|book|part|ep\.?)\s*\d+/i);
@@ -580,8 +617,112 @@ Rules:
   }
 }
 
+
+let singlesFilter = 'all';
+
+function addSingle() {
+  const title = document.getElementById('si-title').value.trim();
+  if (!title) { document.getElementById('singles-msg').textContent='Please enter a title.'; return; }
+  singles.unshift({
+    id: Date.now(),
+    title,
+    issue: document.getElementById('si-issue').value.trim(),
+    status: document.getElementById('si-status').value,
+    notes: document.getElementById('si-notes').value.trim(),
+    addedDate: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
+  });
+  save('singles'); clearSingleForm(); renderSingles(); updateCounts();
+  document.getElementById('singles-msg').textContent=`"${title}" added.`;
+  setTimeout(()=>document.getElementById('singles-msg').textContent='',2500);
+}
+
+function clearSingleForm() {
+  ['si-title','si-issue','si-notes'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('si-status').value='want';
+  document.getElementById('singles-msg').textContent='';
+}
+
+function clearSinglesSearch() { document.getElementById('singles-search').value=''; renderSingles(); }
+
+function setSinglesFilter(f, e) {
+  singlesFilter=f;
+  document.querySelectorAll('#tab-singles .filter-btn').forEach(b=>b.classList.remove('active'));
+  if(e&&e.target)e.target.classList.add('active');
+  renderSingles();
+}
+
+function toggleSingleOwned(id) {
+  const item=singles.find(s=>s.id===id); if(!item)return;
+  item.status = item.status==='owned'?'want':'owned';
+  save('singles'); renderSingles();
+}
+
+function deleteSingle(id) {
+  const item=singles.find(s=>s.id===id); if(!item)return;
+  showConfirm('Remove issue?',`"${item.title}${item.issue?' #'+item.issue:''}" will be removed.`,'Remove',()=>{
+    singles=singles.filter(s=>s.id!==id); save('singles'); updateCounts(); renderSingles();
+  });
+}
+
+function toggleEditSingle(id) {
+  const item=singles.find(s=>s.id===id); if(!item)return;
+  const existing=document.getElementById('edit-single-'+id);
+  if(existing){existing.remove();document.getElementById('card-'+id).classList.remove('editing');return;}
+  const card=document.getElementById('card-'+id); card.classList.add('editing');
+  const form=document.createElement('div'); form.className='edit-form'; form.id='edit-single-'+id;
+  form.innerHTML=`<div class="form-grid">
+    <div class="fg full"><label>Title / Series</label><input type="text" id="est-${id}" value="${item.title.replace(/"/g,'&quot;')}" /></div>
+    <div class="fg"><label>Issue #</label><input type="text" id="esi-${id}" value="${(item.issue||'').replace(/"/g,'&quot;')}" /></div>
+    <div class="fg"><label>Status</label><select id="ess-${id}">
+      <option value="want" ${item.status==='want'?'selected':''}>Want to find</option>
+      <option value="owned" ${item.status==='owned'?'selected':''}>Owned</option>
+    </select></div>
+    <div class="fg full"><label>Notes</label><input type="text" id="esn-${id}" value="${(item.notes||'').replace(/"/g,'&quot;')}" /></div>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:4px;">
+    <button class="btn btn-primary btn-sm" onclick="saveEditSingle(${id})">Save</button>
+    <button class="btn btn-secondary btn-sm" onclick="toggleEditSingle(${id})">Cancel</button>
+  </div>`;
+  card.appendChild(form);
+}
+
+function saveEditSingle(id) {
+  const item=singles.find(s=>s.id===id); if(!item)return;
+  item.title=document.getElementById('est-'+id).value.trim()||item.title;
+  item.issue=document.getElementById('esi-'+id).value.trim();
+  item.status=document.getElementById('ess-'+id).value;
+  item.notes=document.getElementById('esn-'+id).value.trim();
+  save('singles'); renderSingles();
+}
+
+function renderSingles() {
+  const list=document.getElementById('singles-list');
+  const q=(document.getElementById('singles-search').value||'').toLowerCase();
+  let filtered=singles;
+  if(singlesFilter!=='all')filtered=filtered.filter(s=>s.status===singlesFilter);
+  if(q)filtered=filtered.filter(s=>s.title.toLowerCase().includes(q)||(s.issue||'').includes(q)||(s.notes||'').toLowerCase().includes(q));
+  if(!filtered.length){list.innerHTML='<div class="empty">No issues yet. Add some above!</div>';return;}
+  list.innerHTML=filtered.map(s=>`
+    <div class="card${s.status==='owned'?' card-single-owned':''}" id="card-${s.id}">
+      <div class="card-top">
+        <div style="flex:1">
+          <div class="card-title">${s.title}${s.issue?' <span style="color:#888;font-weight:400;">#'+s.issue+'</span>':''}</div>
+          <div class="card-meta" style="margin-top:5px;">
+            <span class="badge ${s.status==='owned'?'badge-single-owned':'badge-single-want'}" style="cursor:pointer" onclick="toggleSingleOwned(${s.id})">${s.status==='owned'?'✓ Owned':'Want to find'}</span>
+          </div>
+          ${s.notes?`<div class="card-notes">${s.notes}</div>`:''}
+          <div class="card-date">Added ${s.addedDate}</div>
+        </div>
+        <div class="card-actions">
+          <button class="btn-edit" onclick="toggleEditSingle(${s.id})">Edit</button>
+          <button class="btn-danger" onclick="deleteSingle(${s.id})">Remove</button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
 function switchTab(name) {
-  const names=['add','collection','wishlist','stats','discover'];
+  const names=['add','collection','wishlist','stats','singles','discover'];
   document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',names[i]===name));
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
   document.getElementById('tab-'+name).classList.add('active');
