@@ -232,7 +232,8 @@
             <option value="owned">Owned</option>
           </select>
         </div>
-        <div class="fg full"><label>Notes (optional)</label><input type="text" id="si-notes" placeholder="e.g. first black costume, key issue" /></div>
+        <div class="fg"><label>Notes (optional)</label><input type="text" id="si-notes" placeholder="e.g. first black costume, key issue" /></div>
+        <div class="fg"><label>Price paid / budget</label><input type="text" id="si-price" placeholder="e.g. $12.00" /></div>
       </div>
       <div class="actions">
         <button class="btn btn-primary" onclick="addSingle()">Add issue</button>
@@ -619,6 +620,12 @@ Rules:
 
 
 let singlesFilter = 'all';
+let collapsedSingleGroups = new Set();
+
+function toggleSingleGroup(title) {
+  if(collapsedSingleGroups.has(title))collapsedSingleGroups.delete(title); else collapsedSingleGroups.add(title);
+  renderSingles();
+}
 
 function addSingle() {
   const title = document.getElementById('si-title').value.trim();
@@ -629,6 +636,7 @@ function addSingle() {
     issue: document.getElementById('si-issue').value.trim(),
     status: document.getElementById('si-status').value,
     notes: document.getElementById('si-notes').value.trim(),
+    price: document.getElementById('si-price').value.trim(),
     addedDate: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
   });
   save('singles'); clearSingleForm(); renderSingles(); updateCounts();
@@ -637,7 +645,7 @@ function addSingle() {
 }
 
 function clearSingleForm() {
-  ['si-title','si-issue','si-notes'].forEach(id=>document.getElementById(id).value='');
+  ['si-title','si-issue','si-notes','si-price'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('si-status').value='want';
   document.getElementById('singles-msg').textContent='';
 }
@@ -677,7 +685,8 @@ function toggleEditSingle(id) {
       <option value="want" ${item.status==='want'?'selected':''}>Want to find</option>
       <option value="owned" ${item.status==='owned'?'selected':''}>Owned</option>
     </select></div>
-    <div class="fg full"><label>Notes</label><input type="text" id="esn-${id}" value="${(item.notes||'').replace(/"/g,'&quot;')}" /></div>
+    <div class="fg"><label>Notes</label><input type="text" id="esn-${id}" value="${(item.notes||'').replace(/"/g,'&quot;')}" /></div>
+    <div class="fg"><label>Price</label><input type="text" id="esp-${id}" value="${(item.price||'').replace(/"/g,'&quot;')}" /></div>
   </div>
   <div style="display:flex;gap:8px;margin-top:4px;">
     <button class="btn btn-primary btn-sm" onclick="saveEditSingle(${id})">Save</button>
@@ -692,7 +701,27 @@ function saveEditSingle(id) {
   item.issue=document.getElementById('esi-'+id).value.trim();
   item.status=document.getElementById('ess-'+id).value;
   item.notes=document.getElementById('esn-'+id).value.trim();
+  item.price=document.getElementById('esp-'+id).value.trim();
   save('singles'); renderSingles();
+}
+
+function singleCardHTML(s) {
+  return `<div class="card${s.status==='owned'?' card-single-owned':''}" id="card-${s.id}" style="margin-bottom:8px;">
+    <div class="card-top">
+      <div style="flex:1">
+        <div class="card-title" style="font-size:14px;">${s.issue?'<span style="color:#888;font-weight:500;">'+s.issue+'</span> — '+s.title:s.title}</div>
+        <div class="card-meta" style="margin-top:5px;gap:6px;">
+          <span class="badge ${s.status==='owned'?'badge-single-owned':'badge-single-want'}" style="cursor:pointer" onclick="toggleSingleOwned(${s.id})">${s.status==='owned'?'✓ Owned':'Want to find'}</span>
+          ${s.price?`<span style="font-size:11px;color:#888;">${s.price}</span>`:''}
+        </div>
+        ${s.notes?`<div class="card-notes" style="font-size:12px;">${s.notes}</div>`:''}
+      </div>
+      <div class="card-actions">
+        <button class="btn-edit" onclick="toggleEditSingle(${s.id})">Edit</button>
+        <button class="btn-danger" onclick="deleteSingle(${s.id})">Remove</button>
+      </div>
+    </div>
+  </div>`;
 }
 
 function renderSingles() {
@@ -700,25 +729,39 @@ function renderSingles() {
   const q=(document.getElementById('singles-search').value||'').toLowerCase();
   let filtered=singles;
   if(singlesFilter!=='all')filtered=filtered.filter(s=>s.status===singlesFilter);
-  if(q)filtered=filtered.filter(s=>s.title.toLowerCase().includes(q)||(s.issue||'').includes(q)||(s.notes||'').toLowerCase().includes(q));
+  if(q)filtered=filtered.filter(s=>s.title.toLowerCase().includes(q)||(s.issue||'').includes(q)||(s.notes||'').toLowerCase().includes(q)||(s.price||'').includes(q));
   if(!filtered.length){list.innerHTML='<div class="empty">No issues yet. Add some above!</div>';return;}
-  list.innerHTML=filtered.map(s=>`
-    <div class="card${s.status==='owned'?' card-single-owned':''}" id="card-${s.id}">
-      <div class="card-top">
-        <div style="flex:1">
-          <div class="card-title">${s.title}${s.issue?' <span style="color:#888;font-weight:400;">#'+s.issue+'</span>':''}</div>
-          <div class="card-meta" style="margin-top:5px;">
-            <span class="badge ${s.status==='owned'?'badge-single-owned':'badge-single-want'}" style="cursor:pointer" onclick="toggleSingleOwned(${s.id})">${s.status==='owned'?'✓ Owned':'Want to find'}</span>
-          </div>
-          ${s.notes?`<div class="card-notes">${s.notes}</div>`:''}
-          <div class="card-date">Added ${s.addedDate}</div>
-        </div>
-        <div class="card-actions">
-          <button class="btn-edit" onclick="toggleEditSingle(${s.id})">Edit</button>
-          <button class="btn-danger" onclick="deleteSingle(${s.id})">Remove</button>
-        </div>
+
+  // Group by title
+  const groups = {};
+  filtered.forEach(s => {
+    const key = s.title.trim();
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(s);
+  });
+
+  let html = '';
+  Object.keys(groups).sort().forEach(title => {
+    const items = groups[title];
+    const collapsed = collapsedSingleGroups.has(title);
+    const ownedCount = items.filter(s=>s.status==='owned').length;
+    const wantCount = items.filter(s=>s.status==='want').length;
+    const safeTitle = title.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    if (items.length === 1) {
+      // Single entry — no group header needed
+      html += singleCardHTML(items[0]);
+    } else {
+      // Multiple entries — show group header
+      html += `<div class="series-header" onclick="toggleSingleGroup('${safeTitle}')">
+        <span>${title} <span style="font-size:11px;font-weight:400;color:#666">${items.length} issues${ownedCount?' · '+ownedCount+' owned':''}${wantCount?' · '+wantCount+' wanted':''}</span></span>
+        <span style="font-size:11px;color:#555">${collapsed?'▸ Show':'▾ Hide'}</span>
       </div>
-    </div>`).join('');
+      <div class="series-entries${collapsed?' collapsed':''}">
+        ${items.map(s=>singleCardHTML(s)).join('')}
+      </div>`;
+    }
+  });
+  list.innerHTML = html;
 }
 
 function switchTab(name) {
