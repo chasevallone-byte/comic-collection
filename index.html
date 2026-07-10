@@ -215,26 +215,53 @@ async function dbGet(type) {
 
 async function dbSet(type, data) {
   setSyncDot('syncing');
-  // Use upsert — single atomic operation, no risk of delete succeeding but write failing
-  const res = await fetch(`${API}?on_conflict=type`, {
-    method: 'POST',
-    headers: { ...HEADERS, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
-    body: JSON.stringify({ id: 3, type, data, updated_at: new Date().toISOString() })
+  // Step 1: try to update existing row
+  const upd = await fetch(`${API}?type=eq.${type}`, {
+    method: 'PATCH',
+    headers: { ...HEADERS, 'Prefer': 'return=minimal' },
+    body: JSON.stringify({ data, updated_at: new Date().toISOString() })
   });
-  if (res.ok) { setSyncDot('ok'); setTimeout(()=>setSyncDot(''),2000); } else setSyncDot('error');
+  if (upd.ok) {
+    // Check if a row was actually updated (may return 200 with 0 rows)
+    const check = await fetch(`${API}?type=eq.${type}&select=id`, { headers: HEADERS });
+    const rows = await check.json();
+    if (rows.length === 0) {
+      // No existing row, insert fresh
+      const ins = await fetch(API, {
+        method: 'POST',
+        headers: { ...HEADERS, 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ id: Date.now(), type, data, updated_at: new Date().toISOString() })
+      });
+      if (ins.ok) { setSyncDot('ok'); setTimeout(()=>setSyncDot(''),2000); }
+      else { setSyncDot('error'); }
+    } else {
+      setSyncDot('ok'); setTimeout(()=>setSyncDot(''),2000);
+    }
+  } else { setSyncDot('error'); }
 }
 
 async function loadAll() {
   try {
     const data = await dbGet('singles');
-    items = data || [];
+    items = (data || []).map(item => ({
+      ...item,
+      condition: item.condition || 'good'
+    }));
   } catch(err) { console.error(err); }
   document.getElementById('loading-screen').style.display='none';
   document.getElementById('main-app').style.display='block';
   renderAll();
 }
 
-async function save() { await dbSet('singles', items); }
+async function save(showMsg=false) {
+  await dbSet('singles', items);
+  if (showMsg) {
+    const msg = document.getElementById('add-msg');
+    msg.style.color = '#2ecc71';
+    msg.textContent = '✓ Saved to your collection.';
+    setTimeout(()=>{ msg.textContent=''; msg.style.color=''; }, 3000);
+  }
+}
 
 // ── Confirm ───────────────────────────────────────────────────────
 function showConfirm(title, msg, cb) {
@@ -279,9 +306,7 @@ function addItem() {
     price: document.getElementById('f-price').value.trim(),
     addedDate: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
   });
-  save(); clearForm(); renderAll();
-  document.getElementById('add-msg').textContent=`Added.`;
-  setTimeout(()=>document.getElementById('add-msg').textContent='',2000);
+  save(true); clearForm(); renderAll();
 }
 
 function clearForm() {
