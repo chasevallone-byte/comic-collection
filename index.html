@@ -215,14 +215,18 @@ async function dbGet(type) {
 
 async function dbSet(type, data) {
   setSyncDot('syncing');
-  await fetch(`${API}?type=eq.${type}`, { method:'DELETE', headers: HEADERS });
-  const res = await fetch(API, { method:'POST', headers:{...HEADERS,'Prefer':'return=minimal'}, body:JSON.stringify({id:1,type,data,updated_at:new Date().toISOString()}) });
+  // Use upsert — single atomic operation, no risk of delete succeeding but write failing
+  const res = await fetch(`${API}?on_conflict=type`, {
+    method: 'POST',
+    headers: { ...HEADERS, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify({ id: 3, type, data, updated_at: new Date().toISOString() })
+  });
   if (res.ok) { setSyncDot('ok'); setTimeout(()=>setSyncDot(''),2000); } else setSyncDot('error');
 }
 
 async function loadAll() {
   try {
-    const data = await dbGet('items');
+    const data = await dbGet('singles');
     items = data || [];
   } catch(err) { console.error(err); }
   document.getElementById('loading-screen').style.display='none';
@@ -230,7 +234,7 @@ async function loadAll() {
   renderAll();
 }
 
-async function save() { await dbSet('items', items); }
+async function save() { await dbSet('singles', items); }
 
 // ── Confirm ───────────────────────────────────────────────────────
 function showConfirm(title, msg, cb) {
