@@ -122,6 +122,7 @@
     <button class="tab active" onclick="switchTab('add')">Add</button>
     <button class="tab" onclick="switchTab('have')">Have <span class="count" id="have-count">0</span></button>
     <button class="tab" onclick="switchTab('need')">Need <span class="count" id="need-count">0</span></button>
+    <button class="tab" onclick="switchTab('lookup')">Lookup</button>
   </div>
 
   <!-- ADD -->
@@ -174,6 +175,13 @@
       <button class="search-clear" onclick="clearSearch('need')">✕</button>
     </div>
     <div id="need-list"></div>
+  </div>
+
+  <!-- LOOKUP -->
+  <div id="tab-lookup" class="section">
+    <p style="font-size:14px;color:#888;margin-bottom:1rem;line-height:1.6;">Type a title and issue number to check your collection instantly.</p>
+    <input type="text" id="lookup-input" placeholder="e.g. Fantastic Four #19" oninput="doLookup()" style="font-size:16px;padding:12px 14px;margin-bottom:1rem;" />
+    <div id="lookup-results"></div>
   </div>
 </div>
 
@@ -375,7 +383,7 @@ function renderHave() { renderList('have','have-list'); }
 function renderNeed() { renderList('need','need-list'); }
 
 function switchTab(name) {
-  const names=['add','have','need'];
+  const names=['add','have','need','lookup'];
   document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',names[i]===name));
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
   document.getElementById('tab-'+name).classList.add('active');
@@ -389,6 +397,91 @@ function checkPassword() {
     document.getElementById('loading-screen').style.display='flex';
     loadAll();
   } else { document.getElementById('login-error').textContent='Incorrect password.'; }
+}
+
+// ── Lookup ────────────────────────────────────────────────────────
+const NOISE_WORDS = ['amazing','uncanny','spectacular','ultimate','invincible','mighty','immortal','incredible','superior','all-new','all new','new','classic','original','return','of','the','and','&'];
+
+function normalizeTitle(str) {
+  let s = str.toLowerCase().trim();
+  // Remove leading noise words
+  NOISE_WORDS.forEach(w => {
+    const re = new RegExp('^' + w + '\\s+', 'i');
+    s = s.replace(re, '');
+  });
+  return s.trim();
+}
+
+function parseQuery(q) {
+  // Extract issue number — match # followed by digits, or just trailing digits
+  const issueMatch = q.match(/#\s*(\d+)|\b(\d+)\s*$/);
+  const issue = issueMatch ? (issueMatch[1]||issueMatch[2]) : null;
+  // Remove issue number and # from title
+  const title = q.replace(/#\s*\d+/, '').replace(/\b\d+\s*$/, '').trim();
+  return { title, issue };
+}
+
+function doLookup() {
+  const q = document.getElementById('lookup-input').value.trim();
+  const el = document.getElementById('lookup-results');
+  if (!q) { el.innerHTML = ''; return; }
+
+  const { title: queryTitle, issue: queryIssue } = parseQuery(q);
+  const normQuery = normalizeTitle(queryTitle);
+
+  if (!normQuery) { el.innerHTML = '<div style="color:#555;font-size:14px;">Keep typing…</div>'; return; }
+
+  // Score each item
+  const scored = items.map(item => {
+    const normItem = normalizeTitle(item.title);
+    let score = 0;
+
+    // Exact title match (normalized)
+    if (normItem === normQuery) score += 100;
+    // Item title contains query
+    else if (normItem.includes(normQuery)) score += 60;
+    // Query contains item title
+    else if (normQuery.includes(normItem)) score += 50;
+    // Word overlap
+    else {
+      const qWords = normQuery.split(/\s+/);
+      const iWords = normItem.split(/\s+/);
+      const overlap = qWords.filter(w=>iWords.includes(w)&&w.length>2).length;
+      score += overlap * 15;
+    }
+
+    // Issue number match
+    if (queryIssue && item.issue) {
+      if (item.issue === queryIssue) score += 80;
+    }
+
+    return { item, score };
+  }).filter(s => s.score >= 30);
+
+  // Sort by score desc
+  scored.sort((a,b) => b.score - a.score);
+  const results = scored.slice(0, 8);
+
+  if (!results.length) {
+    el.innerHTML = '<div style="text-align:center;padding:2rem;color:#555;font-size:14px;">Not in your collection.</div>';
+    return;
+  }
+
+  el.innerHTML = results.map(({item, score}) => {
+    const isExact = item.issue === queryIssue && score >= 150;
+    const statusColor = item.status === 'have' ? '#2ecc71' : '#f5a623';
+    const statusIcon = item.status === 'have' ? '✓' : '✗';
+    const statusLabel = item.status === 'have' ? 'Have it' : 'Need it';
+    return `<div style="background:#1a1a1a;border:1px solid ${item.status==='have'?'#1a4a2a':'#4a3a0d'};border-radius:12px;padding:1rem;margin-bottom:8px;display:flex;align-items:center;gap:12px;">
+      <div style="font-size:22px;color:${statusColor};flex-shrink:0;">${statusIcon}</div>
+      <div style="flex:1;">
+        <div style="font-size:15px;font-weight:600;color:#f0f0f0;">${item.title}${item.issue?' #'+item.issue:''}</div>
+        ${item.notes?`<div style="font-size:12px;color:#888;margin-top:3px;">${item.notes}</div>`:''}
+        ${item.price?`<div style="font-size:11px;color:#666;margin-top:2px;">Price range: ${item.price}</div>`:''}
+      </div>
+      <div style="font-size:12px;font-weight:600;color:${statusColor};flex-shrink:0;">${statusLabel}</div>
+    </div>`;
+  }).join('');
 }
 
 function init() {
