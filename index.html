@@ -144,6 +144,14 @@
         </select>
       </div>
       <div class="fg full">
+        <label>Condition <span style="font-size:10px;color:#555;">(for Have entries)</span></label>
+        <select id="f-condition">
+          <option value="good">🟢 Good — no replacement needed</option>
+          <option value="upgrade">🟡 Upgrade if possible</option>
+          <option value="replace">🔴 Replace — poor condition</option>
+        </select>
+      </div>
+      <div class="fg full">
         <label>Notes (optional)</label>
         <input type="text" id="f-notes" placeholder="e.g. first black costume" />
       </div>
@@ -262,6 +270,7 @@ function addItem() {
     title,
     issue: document.getElementById('f-issue').value.trim(),
     status: document.getElementById('f-status').value,
+    condition: document.getElementById('f-condition').value,
     notes: document.getElementById('f-notes').value.trim(),
     price: document.getElementById('f-price').value.trim(),
     addedDate: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
@@ -273,6 +282,7 @@ function addItem() {
 
 function clearForm() {
   ['f-title','f-issue','f-notes','f-price'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('f-condition').value='good';
   document.getElementById('f-status').value='have';
 }
 
@@ -291,6 +301,11 @@ function toggleEdit(id) {
         <option value="have" ${item.status==='have'?'selected':''}>Have</option>
         <option value="need" ${item.status==='need'?'selected':''}>Need</option>
       </select></div>
+      <div class="fg"><label>Condition</label><select id="ec-${id}">
+        <option value="good" ${(item.condition||'good')==='good'?'selected':''}>🟢 Good</option>
+        <option value="upgrade" ${item.condition==='upgrade'?'selected':''}>🟡 Upgrade if possible</option>
+        <option value="replace" ${item.condition==='replace'?'selected':''}>🔴 Replace</option>
+      </select></div>
       <div class="fg full"><label>Notes</label><input type="text" id="en-${id}" value="${(item.notes||'').replace(/"/g,'&quot;')}" /></div>
       <div class="fg full"><label>Price range</label><input type="text" id="ep-${id}" value="${(item.price||'').replace(/"/g,'&quot;')}" /></div>
     </div>
@@ -308,6 +323,7 @@ function saveEdit(id) {
   item.status = document.getElementById('es-'+id).value;
   item.notes = document.getElementById('en-'+id).value.trim();
   item.price = document.getElementById('ep-'+id).value.trim();
+  item.condition = document.getElementById('ec-'+id).value;
   save(); renderAll();
 }
 
@@ -362,11 +378,23 @@ function renderList(tab, containerId) {
   el.innerHTML = html;
 }
 
+function conditionStyle(item) {
+  if (item.status !== 'have') return { border: '#2a2a2a', badge: '', label: '' };
+  const c = item.condition || 'good';
+  if (c === 'replace') return { border: '#7a1a1a', badge: 'background:#3a0d0d;color:#e07070;', label: '🔴 Replace' };
+  if (c === 'upgrade') return { border: '#7a5a0d', badge: 'background:#3a2a0d;color:#d5a04d;', label: '🟡 Upgrade if possible' };
+  return { border: '#1a4a2a', badge: 'background:#0d3a1a;color:#4dbb8a;', label: '🟢 Good' };
+}
+
 function cardHTML(item, tab) {
-  return `<div class="card" id="card-${item.id}">
+  const cond = conditionStyle(item);
+  return `<div class="card" id="card-${item.id}" style="border-left:4px solid ${cond.border};">
     <div class="card-top">
       <div style="flex:1">
         <div class="card-title">${item.title}${item.issue?' <span class="card-issue">#'+item.issue+'</span>':''}</div>
+        <div style="margin-top:5px;">
+          ${cond.label?`<span style="font-size:11px;padding:2px 8px;border-radius:99px;font-weight:600;${cond.badge}">${cond.label}</span>`:'' }
+        </div>
         ${item.notes?`<div class="card-notes">${item.notes}</div>`:''}
         ${item.price?`<div class="card-price">Price range: ${item.price}</div>`:''}
         <div class="card-date">Added ${item.addedDate}</div>
@@ -479,7 +507,10 @@ function doLookup() {
         ${item.notes?`<div style="font-size:12px;color:#888;margin-top:3px;">${item.notes}</div>`:''}
         ${item.price?`<div style="font-size:11px;color:#666;margin-top:2px;">Price range: ${item.price}</div>`:''}
       </div>
-      <div style="font-size:12px;font-weight:600;color:${statusColor};flex-shrink:0;">${statusLabel}</div>
+      <div style="text-align:right;flex-shrink:0;">
+        <div style="font-size:12px;font-weight:600;color:${statusColor};">${statusLabel}</div>
+        ${item.status==='have'&&item.condition&&item.condition!=='good'?`<div style="font-size:11px;color:${item.condition==='replace'?'#e07070':'#d5a04d'};margin-top:3px;">${item.condition==='replace'?'🔴 Replace':'🟡 Upgrade if possible'}</div>`:''}
+      </div>
     </div>`;
   }).join('');
 }
