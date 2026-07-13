@@ -54,6 +54,9 @@
   .badge { font-size: 11px; padding: 3px 9px; border-radius: 99px; font-weight: 600; }
   .badge-have { background: #0d3a2a; color: #4dbb8a; }
   .badge-need { background: #3a2a0d; color: #d5a04d; }
+  .badge-priority { background: #3a1a4a; color: #c084fc; }
+  .btn-flag { background: transparent; border: 1px solid #2e2e2e; color: #555; font-size: 12px; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-family: inherit; transition: all 0.15s; }
+  .btn-flag.flagged { border-color: #7c3aed; color: #c084fc; }
   .card-notes { font-size: 13px; color: #aaa; margin-top: 6px; line-height: 1.5; }
   .card-price { font-size: 11px; color: #666; margin-top: 4px; }
   .card-date { font-size: 11px; color: #444; margin-top: 4px; }
@@ -123,6 +126,7 @@
     <button class="tab active" onclick="switchTab('add')">Add</button>
     <button class="tab" onclick="switchTab('have')">Have <span class="count" id="have-count">0</span></button>
     <button class="tab" onclick="switchTab('need')">Need <span class="count" id="need-count">0</span></button>
+    <button class="tab" onclick="switchTab('priority')">Priority <span class="count" id="priority-count">0</span></button>
     <button class="tab" onclick="switchTab('lookup')">Lookup</button>
   </div>
 
@@ -186,6 +190,12 @@
     <div id="need-list"></div>
   </div>
 
+  <!-- PRIORITY -->
+  <div id="tab-priority" class="section">
+    <p style="font-size:14px;color:#888;margin-bottom:1.25rem;line-height:1.6;">Your short list — flag issues in the Need tab to add them here.</p>
+    <div id="priority-list"></div>
+  </div>
+
   <!-- LOOKUP -->
   <div id="tab-lookup" class="section">
     <p style="font-size:14px;color:#888;margin-bottom:1rem;line-height:1.6;">Type a title and issue number to check your collection instantly.</p>
@@ -202,7 +212,7 @@ const HEADERS = { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'A
 
 let items = [];
 let confirmCallback = null;
-let collapsedGroups = { have: new Set(), need: new Set() };
+let collapsedGroups = { have: new Set(), need: new Set(), priority: new Set() };
 
 // ── Supabase ──────────────────────────────────────────────────────
 function setSyncDot(s) { const d=document.getElementById('sync-dot'); d.className='sync-dot'+(s?' '+s:''); }
@@ -275,7 +285,7 @@ function closeConfirm() { document.getElementById('confirm-overlay').style.displ
 document.getElementById('confirm-ok-btn').onclick=()=>{ if(confirmCallback)confirmCallback(); closeConfirm(); };
 
 // ── Helpers ───────────────────────────────────────────────────────
-function renderAll() { renderHave(); renderNeed(); updateCounts(); }
+function renderAll() { renderHave(); renderNeed(); renderPriority(); updateCounts(); }
 
 function updateCounts() {
   document.getElementById('have-count').textContent = items.filter(i=>i.status==='have').length;
@@ -427,6 +437,7 @@ function cardHTML(item, tab) {
         <div class="card-date">Added ${item.addedDate}</div>
       </div>
       <div class="card-actions">
+        ${item.status==='need'?`<button class="btn-flag${item.priority?' flagged':''}" onclick="togglePriority(${item.id})" title="${item.priority?'Remove from priority':'Add to priority'}">${item.priority?'★ Priority':'☆'}</button>`:''}
         <button class="btn-edit" onclick="toggleEdit(${item.id})">Edit</button>
         <button class="btn-danger" onclick="deleteItem(${item.id})">Remove</button>
       </div>
@@ -438,7 +449,7 @@ function renderHave() { renderList('have','have-list'); }
 function renderNeed() { renderList('need','need-list'); }
 
 function switchTab(name) {
-  const names=['add','have','need','lookup'];
+  const names=['add','have','need','priority','lookup'];
   document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',names[i]===name));
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
   document.getElementById('tab-'+name).classList.add('active');
@@ -540,6 +551,39 @@ function doLookup() {
       </div>
     </div>`;
   }).join('');
+}
+
+function togglePriority(id) {
+  const item = items.find(i=>i.id===id); if(!item)return;
+  item.priority = !item.priority;
+  save(); renderAll();
+}
+
+function renderPriority() {
+  const el = document.getElementById('priority-list');
+  const flagged = items.filter(i=>i.status==='need'&&i.priority);
+  document.getElementById('priority-count').textContent = flagged.length;
+  if (!flagged.length) { el.innerHTML='<div class="empty">No priority issues yet. Tap ☆ on any Need entry to add it here.</div>'; return; }
+
+  const groups = {};
+  flagged.forEach(i => { if(!groups[i.title])groups[i.title]=[]; groups[i.title].push(i); });
+
+  let html = '';
+  Object.keys(groups).sort().forEach(title => {
+    const entries = groups[title];
+    entries.sort((a,b)=>(parseInt(a.issue)||0)-(parseInt(b.issue)||0));
+    const collapsed = collapsedGroups['priority'] && collapsedGroups['priority'].has(title);
+    const safeTitle = title.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    const issueLabel = entries.length===1?'1 issue':`${entries.length} issues`;
+    html += `<div class="group-header" onclick="toggleGroup('priority','${safeTitle}')">
+      <span>${title} <span style="font-size:11px;font-weight:400;color:#666">${issueLabel}</span></span>
+      <span style="font-size:11px;color:#555">${collapsed?'▸ Show':'▾ Hide'}</span>
+    </div>
+    <div class="group-entries${collapsed?' collapsed':''}">
+      ${entries.map(e=>cardHTML(e,'priority')).join('')}
+    </div>`;
+  });
+  el.innerHTML = html;
 }
 
 function init() {
