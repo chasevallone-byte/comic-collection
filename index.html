@@ -120,7 +120,10 @@
 
 <div class="app" style="display:none;" id="main-app">
   <h1>Comic Collection <span class="sync-dot" id="sync-dot"></span></h1>
-  <p class="subtitle">Track what you have and what you need.</p>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+    <p class="subtitle" style="margin:0;">Track what you have and what you need.</p>
+    <button onclick="exportCollection()" style="font-size:12px;background:transparent;border:1px solid #3a3a3a;color:#888;padding:4px 12px;border-radius:99px;cursor:pointer;font-family:inherit;">↓ Export</button>
+  </div>
 
   <div class="tabs">
     <button class="tab active" onclick="switchTab('add')">Add</button>
@@ -585,6 +588,45 @@ function renderPriority() {
   });
   el.innerHTML = html;
 }
+
+
+function exportCollection() {
+  const have = items.filter(i=>i.status==='have');
+  const need = items.filter(i=>i.status==='need');
+  const dateStr = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  let txt = 'COMIC COLLECTION EXPORT\nDate: ' + dateStr + '\nTotal: ' + items.length + ' issues (' + have.length + ' have, ' + need.length + ' need)\n\n';
+
+  const groupBy = (arr) => arr.reduce((a,i)=>{ (a[i.title]=a[i.title]||[]).push(i); return a; }, {});
+
+  txt += '=== HAVE ===\n';
+  const haveGroups = groupBy(have);
+  Object.keys(haveGroups).sort().forEach(title => {
+    haveGroups[title].sort((a,b)=>(parseInt(a.issue)||0)-(parseInt(b.issue)||0)).forEach(i => {
+      txt += '\n' + i.title + (i.issue?' #'+i.issue:'');
+      if(i.condition&&i.condition!=='good') txt += ' ['+i.condition+']';
+      if(i.notes) txt += ' - ' + i.notes;
+      if(i.price) txt += ' ('+i.price+')';
+    });
+  });
+
+  txt += '\n\n=== NEED ===\n';
+  const needGroups = groupBy(need);
+  Object.keys(needGroups).sort().forEach(title => {
+    needGroups[title].sort((a,b)=>(parseInt(a.issue)||0)-(parseInt(b.issue)||0)).forEach(i => {
+      txt += '\n' + i.title + (i.issue?' #'+i.issue:'');
+      if(i.priority) txt += ' [PRIORITY]';
+      if(i.notes) txt += ' - ' + i.notes;
+      if(i.price) txt += ' ('+i.price+')';
+    });
+  });
+
+  const blob = new Blob([txt], {type:'text/plain'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'Comic_Collection_' + new Date().toISOString().slice(0,10) + '.txt';
+  a.click();
+}
+
 
 function init() {
   if (localStorage.getItem('comic-auth')==='1') { loadAll(); }
