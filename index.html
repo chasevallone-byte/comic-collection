@@ -404,7 +404,7 @@ function renderList(tab, containerId) {
       const an=parseInt(a.issue)||0, bn=parseInt(b.issue)||0;
       return an-bn;
     });
-    const collapsed = collapsedGroups[tab].has(title);
+    const collapsed = !collapsedGroups[tab].has(title);
     const safeTitle = title.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
     const issueLabel = entries.length === 1 ? '1 issue' : `${entries.length} issues`;
     html += `<div class="group-header" onclick="toggleGroup('${tab}','${safeTitle}')">
@@ -575,7 +575,7 @@ function renderPriority() {
   Object.keys(groups).sort().forEach(title => {
     const entries = groups[title];
     entries.sort((a,b)=>(parseInt(a.issue)||0)-(parseInt(b.issue)||0));
-    const collapsed = collapsedGroups['priority'] && collapsedGroups['priority'].has(title);
+    const collapsed = !(collapsedGroups['priority'] && collapsedGroups['priority'].has(title));
     const safeTitle = title.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
     const issueLabel = entries.length===1?'1 issue':`${entries.length} issues`;
     html += `<div class="group-header" onclick="toggleGroup('priority','${safeTitle}')">
