@@ -529,7 +529,7 @@ function doLookup() {
 
   // Sort by score desc
   scored.sort((a,b) => b.score - a.score);
-  const results = scored.slice(0, 8);
+  const results = scored;
 
   if (!results.length) {
     el.innerHTML = '<div style="text-align:center;padding:2rem;color:#555;font-size:14px;">Not in your collection.</div>';
