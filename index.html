@@ -303,7 +303,9 @@ function clearSearch(tab) {
 function toggleGroup(tab, title) {
   const set = collapsedGroups[tab];
   if (set.has(title)) set.delete(title); else set.add(title);
-  tab==='have' ? renderHave() : renderNeed();
+  if (tab==='have') renderHave();
+  else if (tab==='need') renderNeed();
+  else if (tab==='priority') renderPriority();
 }
 
 // ── Add ───────────────────────────────────────────────────────────
